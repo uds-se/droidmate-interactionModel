@@ -61,8 +61,10 @@ open class FitnessProportionateSelection @JvmOverloads constructor(randomSeed: L
 
 	/**
 	 * Selects a widget following "Fitness Proportionate Selection"
+	 *
+	 * TODO: Be careful, probably the 'suspend' has to be added to the function in the future.
 	 */
-	override suspend fun chooseRandomWidget(): ExplorationAction {
+	override fun chooseRandomWidget(): ExplorationAction {
 		val candidates = this.internalGetWidgets()
 		assert(candidates.isNotEmpty())
 

@@ -17,18 +17,24 @@ buildscript {
 }
 
 apply plugin: 'kotlin'
+apply plugin: 'application'
 // for publishing to m2
-apply plugin: 'maven'
+//apply plugin: 'maven'
+mainClassName = "org.droidmate.Main"
 
 repositories {
+    mavenLocal()
     mavenCentral()
-    maven { url 'https://jitpack.io' }
+    maven {url = "https://jitpack.io"}
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlin:kotlin-reflect"
     implementation 'org.slf4j:slf4j-api:1.7.25'
+
+    api 'com.github.uds-se.droidmate:API:master-SNAPSHOT' // android exploration platform
+    
     implementation 'nz.ac.waikato.cms.weka:weka-stable:3.8.1'
 }
 
