@@ -44,9 +44,9 @@ dependencies {
 
     compile 'com.github.uds-se.droidmate:droidmate-2:1.2-RELEASE' // android exploration platform
     compile 'com.natpryce:konfig:1.6.6.0'  // configuration library
-    compile group: 'com.github.hotzkow', name: 'explorationModel', version: "${project.ext.driverLib_version}"
+    implementation 'com.github.hotzkow:explorationModel:master-SNAPSHOT'
 
-    compile group: 'org.apache.commons', name: 'commons-text', version: '1.6'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.6'
 
     implementation 'nz.ac.waikato.cms.weka:weka-stable:3.8.1'
 }
