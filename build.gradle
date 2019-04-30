@@ -20,14 +20,33 @@ repositories {
     maven {url = "https://jitpack.io"}
 }
 
+apply plugin: 'java'
+
+task sourcesJar(type: Jar, dependsOn: "classes") {
+    classifier = 'sources'
+    from sourceSets.main.allJava
+    from sourceSets.main.allSource
+    from sourceSets.test.allSource
+}
+
+apply plugin: 'maven'
+
+artifacts {
+    archives sourcesJar
+}
+
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.jetbrains.kotlin:kotlin-reflect"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:${project.ext.coroutines_version}"
+
     implementation 'org.slf4j:slf4j-api:1.7.25'
 
     compile 'com.github.uds-se.droidmate:droidmate-2:1.2-RELEASE' // android exploration platform
     compile 'com.natpryce:konfig:1.6.6.0'  // configuration library
-    
+
+    compile group: 'org.apache.commons', name: 'commons-text', version: '1.6'
+
     implementation 'nz.ac.waikato.cms.weka:weka-stable:3.8.1'
 }
 

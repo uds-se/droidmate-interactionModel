@@ -23,13 +23,13 @@
 //
 // web: www.droidmate.org
 
-package org.droidmate.exploration.strategy.widget
+package org.droidmate.exploration.strategy
 
 import kotlinx.coroutines.runBlocking
 import org.droidmate.deviceInterface.exploration.ExplorationAction
 import org.droidmate.explorationModel.interaction.Widget
 import org.droidmate.exploration.modelFeatures.ActionCounterMF
-import org.droidmate.exploration.modelFeatures.tobedeleted.EventProbabilityMF
+import org.droidmate.exploration.modelFeatures.EventProbabilityMF
 
 /**
  * Exploration strategy which selects widgets following Fitness Proportionate Selection

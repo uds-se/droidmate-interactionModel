@@ -23,11 +23,12 @@
 //
 // web: www.droidmate.org
 
-package org.droidmate.exploration.strategy.widget
+package org.droidmate.exploration.strategy
 
 import org.droidmate.exploration.ExplorationContext
 import org.droidmate.explorationModel.interaction.Widget
-import org.droidmate.exploration.modelFeatures.tobedeleted.EventProbabilityMF
+import org.droidmate.exploration.modelFeatures.EventProbabilityMF
+import org.droidmate.exploration.strategy.widget.RandomWidget
 
 /**
  * Exploration strategy that select a (pseudo-)random widget from the screen.

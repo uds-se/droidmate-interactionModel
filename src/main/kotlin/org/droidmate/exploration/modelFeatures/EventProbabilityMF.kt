@@ -23,13 +23,12 @@
 //
 // web: www.droidmate.org
 
-package org.droidmate.exploration.modelFeatures.tobedeleted
+package org.droidmate.exploration.modelFeatures
 
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
-import org.apache.commons.lang3.StringUtils
-import org.droidmate.exploration.modelFeatures.ModelFeature
+import org.apache.commons.text.similarity.LevenshteinDistance
 import org.droidmate.exploration.strategy.AbstractStrategy
 import org.droidmate.exploration.strategy.ResourceManager
 import org.droidmate.explorationModel.interaction.State
@@ -155,7 +154,7 @@ open class EventProbabilityMF(
         var closest = ""
 
         for (compareObject in AbstractStrategy.VALID_WIDGETS) {
-            val currentDistance = StringUtils.getLevenshteinDistance(compareObject, target)
+            val currentDistance = LevenshteinDistance().apply(compareObject, target)
             if (currentDistance < distance) {
                 distance = currentDistance
                 closest = compareObject
