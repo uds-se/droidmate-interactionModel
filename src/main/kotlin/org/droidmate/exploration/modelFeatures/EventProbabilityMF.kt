@@ -40,196 +40,202 @@ import weka.core.Instance
 import weka.core.Instances
 import weka.core.converters.ConverterUtils
 import java.io.InputStream
-import java.util.*
+import java.util.UUID
 import kotlin.coroutines.CoroutineContext
 
 @Suppress("MemberVisibilityCanBePrivate")
-open class EventProbabilityMF(modelName: String,
-							  arffName: String,
-							  protected val useClassMembershipProbability: Boolean) : ModelFeature() {
+open class EventProbabilityMF(
+    modelName: String,
+    arffName: String,
+    protected val useClassMembershipProbability: Boolean
+) : ModelFeature() {
 
-	override val coroutineContext: CoroutineContext = CoroutineName("EventProbabilityMF")
+    override val coroutineContext: CoroutineContext = CoroutineName("EventProbabilityMF")
 
-	/**
-	 * Weka classifier with pre-trained model
-	 */
-	protected val classifier: RandomForest by lazy {
-		val model: InputStream = ResourceManager.getResource(modelName)
-		log.debug("Loading model file")
-		weka.core.SerializationHelper.read(model) as RandomForest
-	}
-	/**
-	 * Instances originally used to train the model.
-	 */
-	protected val wekaInstances: Instances by lazy {
-		log.debug("Loading ARFF header")
-		val modelData: InputStream = ResourceManager.getResource(arffName)
-		initializeInstances(modelData)
-	}
+    /**
+     * Weka classifier with pre-trained model
+     */
+    protected val classifier: RandomForest by lazy {
+        val model: InputStream = ResourceManager.getResource(modelName)
+        log.debug("Loading model file")
+        weka.core.SerializationHelper.read(model) as RandomForest
+    }
+    /**
+     * Instances originally used to train the model.
+     */
+    protected val wekaInstances: Instances by lazy {
+        log.debug("Loading ARFF header")
+        val modelData: InputStream = ResourceManager.getResource(arffName)
+        initializeInstances(modelData)
+    }
 
-	/**
-	 * Mutex for synchronization
-	 */
-	protected val mutex = Mutex()
+    /**
+     * Mutex for synchronization
+     */
+    protected val mutex = Mutex()
 
-	/**
-	 * Load instances used to train the model and then remove all elements.
-	 *
-	 * This is necessary because we applied a String-to-Nominal filter and, therefore,
-	 * we are required to use the same indices for the attributes on new instances, i.e.,
-	 * otherwise the model would give false results.
-	 *
-	 * @return Empty Weka instance set (with loaded nominal attributes)
-	 */
-	protected fun initializeInstances(modelData: InputStream): Instances {
-		val source = ConverterUtils.DataSource(modelData)
-		val model = source.dataSet
+    /**
+     * Load instances used to train the model and then remove all elements.
+     *
+     * This is necessary because we applied a String-to-Nominal filter and, therefore,
+     * we are required to use the same indices for the attributes on new instances, i.e.,
+     * otherwise the model would give false results.
+     *
+     * @return Empty Weka instance set (with loaded nominal attributes)
+     */
+    protected fun initializeInstances(modelData: InputStream): Instances {
+        val source = ConverterUtils.DataSource(modelData)
+        val model = source.dataSet
 
-		// Remove all instances (keep attributes)
-		model.delete()
+        // Remove all instances (keep attributes)
+        model.delete()
 
-		// Set HasEvent attribute as Class attribute to predict
-		val numAttributes = model.numAttributes()
-		model.setClassIndex(numAttributes - 1)
+        // Set HasEvent attribute as Class attribute to predict
+        val numAttributes = model.numAttributes()
+        model.setClassIndex(numAttributes - 1)
 
-		return model
-	}
+        return model
+    }
 
-	override suspend fun onNewInteracted(traceId: UUID, targetWidgets: List<Widget>, prevState: State, newState: State) {
-		try {
-			mutex.lock()
-			wekaInstances.delete()
+    override suspend fun onNewInteracted(
+        traceId: UUID,
+        targetWidgets: List<Widget>,
+        prevState: State,
+        newState: State
+    ) {
+        try {
+            mutex.lock()
+            wekaInstances.delete()
 
-			val actionableWidgets = newState.actionableWidgets
-			actionableWidgets.forEach { wekaInstances.add(it.toWekaInstance(newState, wekaInstances)) }
+            val actionableWidgets = newState.actionableWidgets
+            actionableWidgets.forEach { wekaInstances.add(it.toWekaInstance(newState, wekaInstances)) }
 
-			for (i in 0 until wekaInstances.numInstances()) {
-				val instance = wekaInstances.instance(i)
-				try {
-					// Probability of having event
-					val predictionProbability: Double
+            for (i in 0 until wekaInstances.numInstances()) {
+                val instance = wekaInstances.instance(i)
+                try {
+                    // Probability of having event
+                    val predictionProbability: Double
 
-					val equivWidget = actionableWidgets[i]
-					if (useClassMembershipProbability) {
-						// Get probability distribution of the prediction ( [false, true] )
-						predictionProbability = classifier.distributionForInstance(instance)[1]
-					} else {
-						val classification = classifier.classifyInstance(instance)
-						// Classified as true = 1.0
-						predictionProbability = classification
-					}
+                    val equivWidget = actionableWidgets[i]
+                    if (useClassMembershipProbability) {
+                        // Get probability distribution of the prediction ( [false, true] )
+                        predictionProbability = classifier.distributionForInstance(instance)[1]
+                    } else {
+                        val classification = classifier.classifyInstance(instance)
+                        // Classified as true = 1.0
+                        predictionProbability = classification
+                    }
 
-					widgetProbability[equivWidget.uid] = predictionProbability
+                    widgetProbability[equivWidget.uid] = predictionProbability
+                } catch (e: ArrayIndexOutOfBoundsException) {
+                    log.error("Could not classify widget of type ${actionableWidgets[i]}. Ignoring it", e)
+                    // do nothing
+                }
+            }
+        } finally {
+            mutex.unlock()
+        }
+    }
 
-				} catch (e: ArrayIndexOutOfBoundsException) {
-					log.error("Could not classify widget of type ${actionableWidgets[i]}. Ignoring it", e)
-					// do nothing
-				}
-			}
-		}
-		finally {
-			mutex.unlock()
-		}
-	}
+    protected fun Widget.getRefinedType(): String {
+        return if (AbstractStrategy.VALID_WIDGETS.contains(this.className.toLowerCase()))
+            className.toLowerCase()
+        else {
+            // Get last part
+            val parts = className.split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+            var refType = parts[parts.size - 1].toLowerCase()
+            refType = findClosestView(refType)
 
-	protected fun Widget.getRefinedType(): String {
-		return if (AbstractStrategy.VALID_WIDGETS.contains(this.className.toLowerCase()))
-			className.toLowerCase()
-		else {
-			//Get last part
-			val parts = className.split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-			var refType = parts[parts.size - 1].toLowerCase()
-			refType = findClosestView(refType)
+            refType.toLowerCase()
+        }
+    }
 
-			refType.toLowerCase()
-		}
-	}
+    protected fun findClosestView(target: String): String {
+        var distance = Integer.MAX_VALUE
+        var closest = ""
 
-	protected fun findClosestView(target: String): String {
-		var distance = Integer.MAX_VALUE
-		var closest = ""
+        for (compareObject in AbstractStrategy.VALID_WIDGETS) {
+            val currentDistance = StringUtils.getLevenshteinDistance(compareObject, target)
+            if (currentDistance < distance) {
+                distance = currentDistance
+                closest = compareObject
+            }
+        }
+        return closest
+    }
 
-		for (compareObject in AbstractStrategy.VALID_WIDGETS) {
-			val currentDistance = StringUtils.getLevenshteinDistance(compareObject, target)
-			if (currentDistance < distance) {
-				distance = currentDistance
-				closest = compareObject
-			}
-		}
-		return closest
-	}
+    /**
+     * Get the index of a String value on the original Weka training data (ARFF file)
+     *
+     * @return Index of the String in the attribute list or -1 if not found
+     */
+    protected fun Instances.getNominalIndex(attributeNumber: Int, value: String): Double {
+        return this.attribute(attributeNumber)
+            .enumerateValues()
+            .toList()
+            .indexOf(value)
+            .toDouble()
+    }
 
-	/**
-	 * Get the index of a String value on the original Weka training data (ARFF file)
-	 *
-	 * @return Index of the String in the attribute list or -1 if not found
-	 */
-	protected fun Instances.getNominalIndex(attributeNumber: Int, value: String): Double {
-		return this.attribute(attributeNumber)
-				.enumerateValues()
-				.toList()
-				.indexOf(value)
-				.toDouble()
-	}
+    /**
+     * Converts a widget info given a eContext where the widget is inserted (used to locate parents
+     * and children) and a [Weka model][model]
+     *
+     * @receiver [Widget]
+     */
+    protected fun Widget.toWekaInstance(state: State, model: Instances): Instance {
+        val attributeValues = DoubleArray(5)
 
-	/**
-	 * Converts a widget info given a eContext where the widget is inserted (used to locate parents
-	 * and children) and a [Weka model][model]
-	 *
-	 * @receiver [Widget]
-	 */
-	protected fun Widget.toWekaInstance(state: State, model: Instances): Instance {
-		val attributeValues = DoubleArray(5)
+        attributeValues[0] = model.getNominalIndex(0, this.getRefinedType())
 
-		attributeValues[0] = model.getNominalIndex(0, this.getRefinedType())
+        if (this.parentId != null)
+            attributeValues[1] =
+                model.getNominalIndex(1, state.widgets.first { parent -> parent.id == this.parentId }.getRefinedType())
+        else
+            attributeValues[1] = model.getNominalIndex(1, "none")
 
-		if (this.parentId != null)
-			attributeValues[1] = model.getNominalIndex(1, state.widgets.first { parent -> parent.id == this.parentId }.getRefinedType())
-		else
-			attributeValues[1] = model.getNominalIndex(1, "none")
+        val children = state.widgets
+            .filter { p -> p.parentId == this.id }
 
-		val children = state.widgets
-				.filter { p -> p.parentId == this.id }
+        if (children.isNotEmpty())
+            attributeValues[2] = model.getNominalIndex(2, children.first().getRefinedType())
+        else
+            attributeValues[2] = model.getNominalIndex(2, "none")
 
-		if (children.isNotEmpty())
-			attributeValues[2] = model.getNominalIndex(2, children.first().getRefinedType())
-		else
-			attributeValues[2] = model.getNominalIndex(2, "none")
+        if (children.size > 1)
+            attributeValues[3] = model.getNominalIndex(3, children[1].getRefinedType())
+        else
+            attributeValues[3] = model.getNominalIndex(3, "none")
 
-		if (children.size > 1)
-			attributeValues[3] = model.getNominalIndex(3, children[1].getRefinedType())
-		else
-			attributeValues[3] = model.getNominalIndex(3, "none")
+        attributeValues[4] = model.getNominalIndex(4, "false")
 
-		attributeValues[4] = model.getNominalIndex(4, "false")
+        return DenseInstance(1.0, attributeValues)
+    }
 
-		return DenseInstance(1.0, attributeValues)
-	}
+    protected val widgetProbability = mutableMapOf<UUID, Double>() // probability of each widget having an event
 
-	protected val widgetProbability = mutableMapOf<UUID, Double>() // probability of each widget having an event
+    open fun getProbabilities(state: State): Map<Widget, Double> {
+        try {
+            runBlocking { mutex.lock() }
+            val data = state.actionableWidgets
+                .map { it to (widgetProbability[it.uid] ?: 0.0) }
+                .toMap()
 
-	open fun getProbabilities(state: State): Map<Widget, Double> {
-		try {
-			runBlocking{ mutex.lock() }
-			val data = state.actionableWidgets
-					.map { it to (widgetProbability[it.uid] ?: 0.0) }
-					.toMap()
+            assert(data.isNotEmpty()) { "No actionable widgets to be interacted with" }
 
-			assert(data.isNotEmpty()) { "No actionable widgets to be interacted with" }
+            return data
+        } finally {
+            mutex.unlock()
+        }
+    }
 
-			return data
-		} finally {
-			mutex.unlock()
-		}
-	}
+    override fun equals(other: Any?): Boolean {
+        return other is EventProbabilityMF &&
+                other.useClassMembershipProbability == this.useClassMembershipProbability &&
+                other.classifier == this.classifier
+    }
 
-	override fun equals(other: Any?): Boolean {
-		return other is EventProbabilityMF &&
-				other.useClassMembershipProbability == this.useClassMembershipProbability &&
-				other.classifier == this.classifier
-	}
-
-	override fun hashCode(): Int {
-		return this.classifier.hashCode() * this.useClassMembershipProbability.hashCode()
-	}
+    override fun hashCode(): Int {
+        return this.classifier.hashCode() * this.useClassMembershipProbability.hashCode()
+    }
 }

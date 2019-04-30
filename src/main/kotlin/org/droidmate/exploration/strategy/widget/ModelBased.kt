@@ -32,56 +32,58 @@ import org.droidmate.exploration.modelFeatures.tobedeleted.EventProbabilityMF
 /**
  * Exploration strategy that select a (pseudo-)random widget from the screen.
  */
-open class ModelBased @JvmOverloads constructor(randomSeed: Long,
-                                                protected val modelName: String = "HasModel.model",
-                                                protected val arffName: String = "baseModelFile.arff") : RandomWidget(randomSeed) {
+open class ModelBased @JvmOverloads constructor(
+    randomSeed: Long,
+    protected val modelName: String = "HasModel.model",
+    protected val arffName: String = "baseModelFile.arff"
+) : RandomWidget(randomSeed) {
 
-	protected val watcher: EventProbabilityMF
-		get() = (eContext.findWatcher { it is EventProbabilityMF } as EventProbabilityMF)
+    protected val watcher: EventProbabilityMF
+        get() = (eContext.findWatcher { it is EventProbabilityMF } as EventProbabilityMF)
 
-	/**
-	 * Get all widgets which from the current state that are classified as "with event"
-	 *
-	 * @return List of widgets which have an associated event (according to the model)
-	 */
-	protected open fun internalGetWidgets(): List<Widget> {
-		return watcher.getProbabilities(currentState)
-				.filter { it.value == 1.0 }
-				.map { it.key }
-	}
+    /**
+     * Get all widgets which from the current state that are classified as "with event"
+     *
+     * @return List of widgets which have an associated event (according to the model)
+     */
+    protected open fun internalGetWidgets(): List<Widget> {
+        return watcher.getProbabilities(currentState)
+            .filter { it.value == 1.0 }
+            .map { it.key }
+    }
 
-	/**
-	 * Return the widgets which can be interacted with. In this strategy only widgets "with events"
-	 * can be interacted with.
-	 *
-	 * @return List of widgets which have an associated event (according to the model)
-	 */
-	override fun getAvailableWidgets(): List<Widget> {
-		var candidates = internalGetWidgets()
+    /**
+     * Return the widgets which can be interacted with. In this strategy only widgets "with events"
+     * can be interacted with.
+     *
+     * @return List of widgets which have an associated event (according to the model)
+     */
+    override fun getAvailableWidgets(): List<Widget> {
+        var candidates = internalGetWidgets()
 
-		this.eContext.lastTarget?.let { candidates = candidates.filterNot { p -> p.uid == it.uid } }
+        this.eContext.lastTarget?.let { candidates = candidates.filterNot { p -> p.uid == it.uid } }
 
-		return candidates
-	}
+        return candidates
+    }
 
-	override fun initialize(memory: ExplorationContext) {
-		super.initialize(memory)
+    override fun initialize(memory: ExplorationContext) {
+        super.initialize(memory)
 
-		eContext.addWatcher(EventProbabilityMF(modelName, arffName, true))
-	}
+        eContext.addWatcher(EventProbabilityMF(modelName, arffName, true))
+    }
 
-	// region java overrides
+    // region java overrides
 
-	override fun equals(other: Any?): Boolean {
-		if (other !is ModelBased)
-			return false
+    override fun equals(other: Any?): Boolean {
+        if (other !is ModelBased)
+            return false
 
-		return other.watcher == this.watcher
-	}
+        return other.watcher == this.watcher
+    }
 
-	override fun hashCode(): Int {
-		return this.javaClass.hashCode()
-	}
+    override fun hashCode(): Int {
+        return this.javaClass.hashCode()
+    }
 
-	// endregion
+    // endregion
 }
